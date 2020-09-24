@@ -1,0 +1,169 @@
+; ===========================================================
+;  logbN = X
+;  pow(b, X) = N
+;  se b:4, N: 16
+;  então X:2  
+; ===========================================================
+; -----------------------------------------------------------
+;  Este programa trabalha com numeros em 16 bits para o N
+;  E 8 bits para a base.
+;  para este programa foi usado para o n: nMSB, nLSB;
+;  para auxiliar no funcionamento do programa,
+;  foram usados 4 endereços auxiliares para os numeros
+;  2 para checagem se foi atingido o N e os outros 2 foram
+;  usados para irem dando a soma aos outros 2 auxiliares.
+; -----------------------------------------------------------
+
+
+; Zera a saida e as auxiliares
+inicio:
+  LDA zero 
+  STA x
+  STA nMSB2
+  STA nLSB2
+
+; carregando e checando se o maior bit é zerado,
+; se for, passa para uma checagem se o menor é 0 tbm
+  LDA nMSB
+  JZ checagem_zero
+
+; label para antes de iniciar a checagem para ver se o valor
+; foi atingido, ver se ele já está para ter o seu fim"
+antes_checagem:
+  LDA b
+  JZ alternativo_fim
+  STA nLSB2
+  SUB um
+  JZ fim
+
+  LDA x
+  ADD um
+  STA x
+
+; checagem é sempre passado ao fim de um laço,
+; para *checagem* se o numero foi atingido
+checagem: 
+  LDA nMSB
+  SUB nMSB2
+  JZ pos_jp
+  JN fim
+  JB fim
+  JP inicia_laco
+
+; caso o maior bit tenha sido atingido, faz uma segunda checagem
+; para ver se o menor bit também foi atingido
+pos_jp:
+  LDA nLSB
+  SUB nLSB2 
+  JB fim
+  JZ fim
+
+; dá inicio ao laço, modificando as variaveis de soma
+inicia_laco:
+ ; modifica os dados para iniciar acrescentar ao laço
+  LDA x
+  ADD um
+  STA x
+  ; carrega o maior bit auxiliar principal ao somado
+  LDA nMSB2
+  STA nMSBsoma
+  LDA nLSB2
+  JZ primeiro_passo
+
+; usada para dar continuidade ao laço após saltos no programa.
+continua_inicia_laco:
+  ; carrega o menor bit auxiliar principal ao somado
+  STA nLSBsoma
+  ; define o limite para percorre
+  LDA b
+  STA percorre
+
+
+; laço principal, faz multiplas somas até o num. da potencia
+laco: 
+; percorre faz o serviço do laço
+  LDA percorre
+  SUB um
+  JZ checagem
+  STA percorre
+
+; acrescenta o maior bit somado ao auxiliar principal
+  LDA nMSB2
+  ADD nMSBsoma
+  STA nMSB2
+; acrescenta o menor bit somado ao auxiliar principal
+  LDA nLSB2
+  ADD nLSBsoma
+  STA nLSB2
+; checagem, caso a soma em menor bit dar carry
+; acrescenta 1 ao maior bit.  
+  JC deu_carry    
+; reposiciona para o inicio do laço, até percorre == 0
+  JMP laco
+
+; label auxiliar para quando dar carry na soma do menor bit 
+; ao menor bit auxiliar principal
+deu_carry:
+  LDA nMSB2
+  ADD um
+  STA nMSB2
+  JMP laco
+
+; primeiro passo, auxiliar para quando nLSB2 == 0 
+primeiro_passo:
+  LDA nMSB2
+  SUB dois
+  JP primeiro_passo2
+  LDA zero
+  JMP continua_inicia_laco
+
+; auxiliar para o primeiro passo, caso (nMSB2-2) > 0
+primeiro_passo2:
+  LDA nMSB2
+  JMP continua_inicia_laco
+
+; checagem para caso o n == 0, termina o programa.
+checagem_zero:
+  LDA nLSB
+  SUB um
+  JZ fim
+  JMP antes_checagem
+
+; fim alterantivo onde é acrescentado um ao X, 
+; usado para quando (base == 0)   para dar certin
+alternativo_fim:
+  ADD um
+  STA x
+
+; e finalmente, o fim para o programa:
+fim:
+  HLT
+
+
+;  ABAIXO SOMENTE OS DADOS
+; ¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨
+
+ORG 128
+; ENDEREÇOS PRINCIPAIS
+nMSB: DB 0
+nLSB: DB 0
+b: DB 0
+x: DB 0
+
+;---------------------------------------------------------------------
+; ENDEREÇOS AUXILIARES
+; endereços usados para guardarem o valor das potencias
+nMSB2: DB 0
+nLSB2: DB 0
+
+; endereços usados para irem acrescentando ao valor das potencias
+nMSBsoma: DB 0
+nLSBsoma: DB 0 
+
+; auxiliar para o laço, quando percorre=0, o laço termina.
+percorre: DB 0 
+
+; numeros auxiliares para o programa
+zero: DB 0
+um: DB 1
+dois: DB 2
