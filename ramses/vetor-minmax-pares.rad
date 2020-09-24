@@ -1,0 +1,73 @@
+; registrador A guardará o endereco para o indice do vetor.
+; registrador B guardará o valor do endereco do vetor(e outras informações).
+; registrador X será usado somente para auxiliar nas subrotinas.
+
+; Definindo os valores iniciais para as variaveis do programa.
+ORG 0 
+LDR A #255
+STR A MENOR
+
+LDR A #0
+STR A PARES
+STR A MAIOR
+STR A VETOR_TAMANHO
+
+; Carregando para o registrador A o endereço de inicio do vetor.
+LDR A VETOR
+
+LOOP: 
+	STR A VETOR_INDICE_ATUAL 	; 
+	LDR B VETOR_INDICE_ATUAL,I
+	ADD B #1
+	JZ FIM
+	SUB B #1
+
+	STR B param
+	JSR CHECA_MENOR
+	JSR CHECA_MAIOR
+
+	LDR B VETOR_TAMANHO
+	ADD B #1
+	STR B VETOR_TAMANHO
+	SUB B #1
+	ADD B PARES
+	STR B PARES
+	
+	ADD A #1
+JMP LOOP
+
+FIM:
+	HLT
+
+CHECA_MENOR:	NOP
+	LDR X MENOR
+	SUB X param
+	JC EH_MENOR
+	JMP CHECA_MENOR,I
+EH_MENOR:
+	STR B MENOR
+	JMP CHECA_MENOR,I
+
+
+CHECA_MAIOR:	NOP
+	LDR X param
+	SUB X MAIOR
+	JC EH_MAIOR
+	JMP CHECA_MAIOR,I
+EH_MAIOR:
+	STR B MAIOR
+	JMP CHECA_MAIOR,I
+
+
+; Variaveis
+ORG 128
+VETOR_INDICE_ATUAL: DB 0
+VETOR_TAMANHO: DB 0 
+param: DB 0 
+
+ORG 192
+VETOR: DB 196
+PARES: DB 255
+MENOR: DB 0
+MAIOR: DB 255
+AREA_VETOR: DW 0
