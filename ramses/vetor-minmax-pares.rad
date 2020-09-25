@@ -1,4 +1,29 @@
-; registrador A guardará o endereco para o indice do vetor.
+; =======================================================================================
+;  Este programa trabalha com números em 8 bits. 
+;  
+;  Para os dados foram usados 3 endereços para auxiliarem na implementação do programa:
+;    1. vetor_indice_atual:Endereço. Auxiliar para a label LOOP.
+;    2. vetor_tamanho:Numero Mutavel. Auxiliar para o calculo dos Pares.
+;    3. param:Numero. Auxiliar para as subrotinas ChecaMenor e ChecaMaior passando
+;                     o valor do Endereço dado por vetor_indice_atual.
+;  
+;  Para encontrar os valores MENOR e MAIOR foram usadas duas subrotinas 
+;  e uma label para cada: 
+;    1. ChecaMenor: dado param, se menor que o número de MENOR, usa a label EhMenor
+;                   para fazer a troca de MENOR = param 
+;    2. ChecaMaior: dado param, se maior que o número de MAIOR, usa label EhMaior 
+;                   para fazer a troca de MAIOR = param
+;  
+;  Para calcular os pares foi utilizado vetor_tamanho em que a cada iteração do vetor 
+;   registradorB = vetor_tamanho,
+;   registradorB++,
+;   vetor_tamanho = registradorB,
+;   registradorB--,
+;   registradorB += PARES,
+;   PARES = registradorB.
+; =======================================================================================
+
+; registrador A guardará o endereço para o indice do vetor.
 ; registrador B guardará o valor do endereco do vetor(e outras informações).
 ; registrador X será usado somente para auxiliar nas subrotinas.
 
@@ -10,59 +35,61 @@ STR A MENOR
 LDR A #0
 STR A PARES
 STR A MAIOR
-STR A VETOR_TAMANHO
+STR A vetor_tamanho
 
-; Carregando para o registrador A o endereço de inicio do vetor.
-LDR A VETOR
 
-LOOP: 
-	STR A VETOR_INDICE_ATUAL 	; 
-	LDR B VETOR_INDICE_ATUAL,I
-	ADD B #1
-	JZ FIM
-	SUB B #1
+LDR A VETOR 								; registradorA = VETOR
 
-	STR B param
-	JSR CHECA_MENOR
-	JSR CHECA_MAIOR
+LOOP:	 								; while (1) {
+	STR A vetor_indice_atual 					; 	vetor_indice_atual = registradorA,
+	LDR B vetor_indice_atual,I					; 	registradorB = *(vetor_indice_atual),
+	ADD B #1							; 	registradorB++,
+	JZ FIM								; 	if (registradorB == 0) break;
+	SUB B #1							; 	registradorB--,
 
-	LDR B VETOR_TAMANHO
-	ADD B #1
-	STR B VETOR_TAMANHO
-	SUB B #1
-	ADD B PARES
-	STR B PARES
+	STR B param							; 	param = registradorB,
+	JSR ChecaMenor							; 	ChecaMenor(param),
+	JSR ChecaMaior							; 	ChecaMaior(param),
+
+	LDR B vetor_tamanho						; 	registradorB = vetor_tamanho,
+	ADD B #1							; 	registradorB++,
+	STR B vetor_tamanho						; 	vetor_tamanho = registradorB,
+	SUB B #1							; 	registradorB--,
+	ADD B PARES							; 	registradorB += PARES,
+	STR B PARES							; 	PARES = registradorB,
 	
-	ADD A #1
-JMP LOOP
+	ADD A #1							; 	registradorA++;
+JMP LOOP								; }
 
-FIM:
-	HLT
-
-CHECA_MENOR:	NOP
-	LDR X MENOR
-	SUB X param
-	JC EH_MENOR
-	JMP CHECA_MENOR,I
-EH_MENOR:
-	STR B MENOR
-	JMP CHECA_MENOR,I
+FIM: HLT
 
 
-CHECA_MAIOR:	NOP
-	LDR X param
-	SUB X MAIOR
-	JC EH_MAIOR
-	JMP CHECA_MAIOR,I
-EH_MAIOR:
-	STR B MAIOR
-	JMP CHECA_MAIOR,I
+; Subrotinas e Labels auxiliares
+
+ChecaMenor:	NOP							; ChecaMenor(param) {
+	LDR X MENOR							; 	registradorX = MENOR,
+	SUB X param							; 	registradorX -= param,
+	JC EhMenor							; 	if (registradorX < 0) return EhMenor();
+	JMP ChecaMenor,I						; }
+EhMenor:								; EhMenor() {
+	STR B MENOR							; 	MENOR = registradorB;
+	JMP ChecaMenor,I						; }
+
+
+ChecaMaior:	NOP							; ChecaMaior(param) {
+	LDR X param							; 	registradorX = param,
+	SUB X MAIOR							;	param -= MAIOR,
+	JC EhMaior							;	if (registradorX < 0) return EhMaior();
+	JMP ChecaMaior,I						; }
+EhMaior:								; EhMaior() {
+	STR B MAIOR							;	MAIOR = registradorB;
+	JMP ChecaMaior,I						; }
 
 
 ; Variaveis
 ORG 128
-VETOR_INDICE_ATUAL: DB 0
-VETOR_TAMANHO: DB 0 
+vetor_indice_atual: DB 0
+vetor_tamanho: DB 0 
 param: DB 0 
 
 ORG 192
@@ -70,4 +97,4 @@ VETOR: DB 196
 PARES: DB 255
 MENOR: DB 0
 MAIOR: DB 255
-AREA_VETOR: DW 0
+AREA_VETOR: DAB 0
