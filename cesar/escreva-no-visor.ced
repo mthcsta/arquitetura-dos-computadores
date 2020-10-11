@@ -1,0 +1,39 @@
+MOV (R7)+, R3 
+DW VISOR
+
+InicioWhile:
+	JSR	R7,getchar	
+	CMP	R0,#HD
+	BEQ	FimWhile
+
+	MOV	R0, (R3)
+	CMP	R0,#H8
+	BEQ	RemoveInc
+	INC R3
+	BNE	InicioWhile
+RemoveInc:
+	DEC R3
+	MOV	R0, (R3)
+	
+	JMP	InicioWhile
+
+
+FimWhile: HLT
+
+getchar:
+	
+getchar_While:
+	CMP	STATUS,#H80
+	BNE	getchar_While
+	
+	MOV	DATA,R0
+	
+	CLR	STATUS
+
+	RTS	R7
+
+
+ORG HFFDA
+STATUS: DB 0
+DATA:DB 0
+VISOR:DB 0
