@@ -1,0 +1,378 @@
+;
+;
+;******************************************************************************
+;
+;	Arquivo de Referencia para iniciar o desenvolvimento do kernel
+;
+;	versao: 2020.1
+;
+;	areas de memoria
+;
+;	8000 - FF7F		_KRN_INT
+;					Area de Kernel para implementacao dos alunos
+;
+;	FF80 - FFBF 	_IOAREA16
+;					Area de perifericos, acessada na base 16 bits
+;
+;	FFC0 - FFFF		_IOAREA08
+;					Area de perifericos, acessada na base 8 bits
+;					
+;******************************************************************************
+
+_APP:		equ	h0100
+_KRN_INT:	equ	h8000
+_IOAREA16:	equ	hFF80
+_IOAREA08:	equ	hFFC0
+
+
+;
+;------------------------------------------------------------------------------
+;	Area reservada para os perifericos
+;------------------------------------------------------------------------------
+
+; Acesso em 16 bits
+	org	_IOAREA16
+	daw	[31]
+IVET:	dw	0           ; Vetor de interrupcao
+
+; Acesso em 8 bits
+	org	_IOAREA08
+	dab	[23]
+TIMDT:	db	0           ; Registro de programacao do timer
+INTS:	db	0           ; INTERRUPT STATUS: IP x x x . x x IPStec IPStim
+INTE:	db	0           ; INTERRUPT ENABLE: IE x x x . x x IEStec IEStim
+TECST:	db	0           ; Status do teclado
+TECDT:	db	0           ; Dado do teclado
+VISOR:	dab	[36]        ; Portas de acesso ao visor
+
+CR:			equ	H0D
+BS:			equ	H08
+
+
+		
+	
+;
+;------------------------------------------------------------------------------
+;	Area para o kernel
+;	Inicializacao (reset)
+;	Funcoes para usa do aplicacao
+;------------------------------------------------------------------------------
+		org		_KRN_INT
+		dw		_reset
+		dw		_kbhit
+		dw		_shift
+		dw		_ctrl
+		dw		_getchar
+		dw		_putchar
+		dw		_putmsg
+		dw		_start
+		dw		_ready
+	
+
+	
+;------------------------------------------------------------------------------
+;	Codigo de RESET (BOOT) do processador/interrupcao
+;------------------------------------------------------------------------------
+_reset:
+; 1) Desabilitar o sistema de interrupcoes
+		clr	INTE	
+		clr	INTS
+; 2) Inicializar o stack pointer (SP = R6)
+		mov	#HFF7F	r6
+; 3) Inicializar as variaveis internas usadas pelo sistema de interrupcoes (IVET, INTE, etc.)
+		mov	#_isr	IVET            ; 
+		clr	(r6)            		;
+		or	#h83	INTE            ;
+; 4) Inicializar as variaveis internas do kernel
+		clr 	SHIFT           	;
+		clr 	CTRL            	;
+		clr	MILLISECONDS            ;
+
+; 5) Inicializar o teclado zerando o byte de estado (TECST, endereco 65498)
+		clr	TECST           	;
+		clr	TECDT           	;
+; 6) Inicializar o timer
+		mov	#10	TIMDT           ;
+; 7) Limpar o visor
+		mov	#0	r0          ; 
+		loop_limpa_visor:           ; loop para varrer todos indices do visor.
+            mov	#0	VISOR(r0)
+            inc	r0          
+            cmp	r0	#36
+            bne	loop_limpa_visor
+        clr r0					; limpa r0
+; 8) Habilitar interrupicoes
+		
+; 9) Retornar para o programa de aplicacao com um desvio para o endereco H0100 da memoria
+        jmp		_APP
+
+
+;------------------------------------------------------------------------------
+;	BOOL kbhit(VOID)
+;
+;	Retorna em R0 o estado do teclado. Cada bit de R0 representa uma informacao:
+;	>	Bit 0: indica se ha tecla;
+;	>	Bit 1: indica se o estado SHIFT estah ligado;
+;	>	Bit 2: indica se o estado CTRL estah ligado.
+;	>	Os outros bits devem retornar, sempre, em zero.
+;	Essa funcao nao eh bloqueante. Ou seja, deve retornar imediatamente para o chamador, com a informacao do teclado.
+;------------------------------------------------------------------------------
+_kbhit: 
+	mov	#0	R0                     ; zera bits do retorno
+	cmp	TECST	#h80                   ;
+	bne	checkshift_kbhit               ; caso nao haja tecla, pula para checagem de shift
+	add	#1	R0                     ; caso haja, liga bit 0
+	checkshift_kbhit:                      ;
+		cmp	SHIFT	#1             ;
+		bne	checkctrl_kbhit        ; caso shift = 0, pula para checagem de ctrl
+		add	#2	R0             ; caso shift = 1, liga bit 1
+	checkctrl_kbhit:                       ;
+		cmp	CTRL	#1             ;
+		bne	end_kbhit              ; caso ctrl = 0, pula para o fim de kbhit
+		add	#4	R0             ; caso ctrl = 1, liga bit 2
+                                               ;
+	end_kbhit:	                       ;
+		rts		r7             ;
+
+	
+;------------------------------------------------------------------------------
+;	VOID shift(BOOL)
+;
+;Funcao:
+;	Liga ou desliga o estado SHIFT, conforme o valor de R0: 
+;	>     Zero: desliga o estado SHIFT 
+;	>     Outro valor: liga o estado SHIFT 
+;------------------------------------------------------------------------------
+_shift:
+	tst r0				      ;
+	bne turnon_shift                      ; caso r0 != 0, pula para label que liga shift
+	mov	#0	SHIFT                 ; caso r0 == 0, desliga shift e termina
+	br	end_shift                            ;
+                                              ;
+	turnon_shift:                         ;
+		mov	#1	SHIFT         ; liga shift e termina
+	
+	end_shift:
+		rts		r7            ;
+
+
+
+;------------------------------------------------------------------------------
+;	VOID ctrl(BOOL)
+;
+;Funcao:
+;	Liga ou desliga o estado CTRL, conforme o valor de R0: 
+;	>     Zero: desliga o estado CTRL 
+;	>     Outro valor: liga o estado CTRL 
+;------------------------------------------------------------------------------
+_ctrl:
+	tst r0					
+	bne turnon_ctrl                     ; caso r0 != 0, pula para label que liga ctrl
+	mov	#0	CTRL                ; caso r0 == 0, desliga ctrl e termina
+	br	end_ctrl                          ;
+                                            ;
+	turnon_ctrl:                        ;
+		mov 	#1	CTRL        ; liga ctrl e termina
+	
+	end_ctrl:
+		rts		r7
+
+	
+;------------------------------------------------------------------------------
+;	CHAR getchar(VOID)
+;
+;Funcao:
+;	Obtem o codigo ASCII de um caractere digitado no teclado e devolve o mesmo no registrador R0.
+;	Nao ecoa o caractere lido no visor.
+;	Diferentemente da kbhit, permanece bloqueada, aguardando que algum caractere seja digitado.
+;	Retorna as letras conforme o estado SHIFT e CTRL:
+;	>	Se ambos desligados, retorna sempre letras minusculas (H61 a H7A);
+;	>	Se CTRL ligado, converte letras em caracteres de controle correspondentes (valores ASCII entre H00 e H1A)
+;	>	Se CTRL desligado e SHIFT ligado, converte letras para as correspondentes letras maiusculas (valores ASCII entre H41 e H5A)
+;------------------------------------------------------------------------------
+_getchar:
+	cmp	TECST,#H80 	            ;
+	bne	_getchar                    ; espera que uma tecla seja apertada
+
+	clr	TECST                       ; limpa status do teclado                                            ;
+	mov	TECDT,R0                    ; move tecla para r0 e limpa dados do tecla
+	clr	TECDT		            ;
+	jsr	r7 	_processchar        ; chama funcao que processa o botao apertado
+                                            ;
+	rts		r7                  ;
+
+;------------------------------------------------------------------------------
+;	VOID	putchar(WORD, WORD, CHAR)
+;
+;Funcao:
+;	Escreve um caractere no visor. Os parametros de entrada da funcao sao os seguintes: 
+;	> R0: ASCII do caractere a ser colocado no visor (entre H00 e H7E) 
+;	> R1: Numero do visor a ser usado (0 ou 1) 
+;	> R2: Posicao no visor selecionado (entre 0 e 17) 
+;	Se a funcao for executada corretamente, retornar 0 (zero) em R0. 
+;	Caso ocorra erro ou se os valores fornecidos na entrada sejam invalidos, a funcao deve ser ignorada e retornado valor diferente de 0 (zero) em R0. 
+;------------------------------------------------------------------------------
+_putchar:
+	cmp	#1	r1                                      ;  
+	bcs	error_putchar                                   ; checa se o visor existe, se nao, pula pra erro.
+                                                                ;
+	cmp	#17	r2                                      ;
+	bcs	error_putchar                                   ; checa se a posicao passada no visor existe, se nao, pula pra erro,
+	br	success_putchar                                 ; se sim, pula para sucess. 
+                                                                ;
+	error_putchar:                                          ; 
+		mov	#400	r0                              ; define r0 com um codigo de erro e termina a funcao.
+		br	end_putchar                             ;
+                                                                ;
+	success_putchar:                                        ;
+                                                                ;
+		tst	r1                                      ; r1 == visor.
+		beq	do_putchar                              ; if (visor == 0)
+		add	#17	r1                              ; ir ao visor 1.
+                                                                ;
+		do_putchar:					;
+			add	r2	r1                      ; adiciona o indice do visor selecionado
+			mov 	r0 	VISOR(r1)               ; adiciona o caractere ao visor[indice]
+			mov	#0	r0                      ; zera o r0 para informar que tudo correu bem.
+	end_putchar:                                            ;
+		rts	r7                                      ;
+
+	
+;------------------------------------------------------------------------------
+;	VOID	putmsg(WORD, WORD, CHAR*)
+;
+;Funcao:
+;	Escreve uma mensagem no visor. Os parimetros de entrada da funcao sao os seguintes:
+;	> R0: Endereco do string a ser colocado no visor. O string deve ser terminado com \0 (string C). 
+;	> R1: Numero do visor a ser usado (0 ou 1) 
+;	> R2: Posicao no visor selecionado (entre 0 e 17) 
+;	Se a funcao for executada corretamente, retornar 0 (zero) em R0. 
+;	Caso ocorra erro ou se os valores fornecidos na entrada sejam invalidos, a funcao deve ser ignorada e retornado valor diferente de 0 (zero) em R0. 
+;	Caso o string seja maior do que o tamanho do visor (18 caracteres), o string deve ser truncado. 
+;------------------------------------------------------------------------------
+_putmsg:
+	cmp	#1	r1                                      ;
+	bcs	error_putmsg                                    ; checa se o visor existe, se nao, pula pra erro.
+                                                                ;
+	cmp	#17	r2                                      ;
+	bcs	error_putmsg                                    ; checa se a posicao passada no visor existe, se nao, pula pra erro,
+                                                                ;
+	dec r0                                                  ; volta 1 endereco de caractere perdido.
+	tst r1                                                  ; r1 == visor
+	beq	loop_putmsg                                     ; if (visor == 0)
+	add	#17	r1                                      ; ir ao visor 1.
+	loop_putmsg:                                            ;
+		mov	(r0) VISOR(r1)                          ; adiciona caractere ao visor e indice marcado
+		inc	r1                                      ; proximo indice do vetor
+		inc	r0                                      ; proximo indice da string
+		and	#H00FF	(r0)                            ; 
+		beq	clrR0_putmsg                            ; verifica se terminou a string
+		cmp	#18	r1                              ;
+		bne	loop_putmsg                             ; verifica se passou do limite, caso sim, truncar! 
+		                                                ;
+	error_putmsg:                                           ; 
+		mov	#400	r0                              ; e retornar um numero diferente de 0 em R0
+		br end_putmsg                                   ; 
+                                                                ;
+	clrR0_putmsg:                                           ; usada apenas quando tudo ocorre bem.
+		clr r0                                          ;
+     ;                                                          ;
+	end_putmsg:                                             ;
+		rts		r7                              ;
+
+	
+;------------------------------------------------------------------------------
+;	VOID start (WORD)
+;
+;Funcao:
+;	Inicializa uma temporizaï¿½ï¿½o
+;	Se for chamada, novamente, antes do tempo atingir o seu final, um novo tempo serah programado.
+;	Essa funcao deve ser usada em conjunto com a funcao _ready
+;	Esse timer deve ter uma resolucao de 10ms
+;Entra:
+;	R0 = valor do tempo, em milisegundos
+;------------------------------------------------------------------------------
+_start:
+	mov	r0	MILLISECONDS                          ; move o parametro r0 para uma variavel auxiliar
+	or	#h81	INTE                                  ; liga o interruptor timer(para caso seja desligado durante o programa)
+	rts		r7		
+		
+
+;------------------------------------------------------------------------------
+;	bool ready(void)
+;
+;Funcao:
+;	Informa se o tempo programado pela funcao _start esgotou-se.
+;Retorna:
+;	R0==0, se o tempo programado nao se esgotou.
+;	R0<>0, se o tempo programado estogou-se
+;------------------------------------------------------------------------------
+_ready:
+	tst 	MILLISECONDS                              ;
+	bne	continua_ready                            ; caso MILLISECONDS == 0
+	mov	#1	r0                                ; retorna 1 e termina a funcao.
+	br	fim_ready                                 ;
+	continua_ready:                                   ; caso nao,
+		mov	#0	r0                        ; retorna 0
+	fim_ready:                                        ; e termina a funcao.
+		rts		r7                        ;
+
+	
+;------------------------------------------------------------------------------
+;
+;Funçao: Interruptor Timer
+;	
+;------------------------------------------------------------------------------
+_isr:
+	mov	r4	-(r6)                       ; guarda o reg. 4 para usa-lo
+	mov	INTS	r4                          ; r4 = INTS
+	asr	r4                                  ; rola 1 bit de r4 
+	bcc	fim_isr                             ; Caso nao tenha notificacao Timer, termina funcao.
+	sub	#10	MILLISECONDS                ; Caso tenha, diminui 10 de MILLISECONDS
+	fim_isr:				    ;
+		and	#h80	INTS                ; limpa notificacoes
+		mov	(r6)+	r4                  ; devolve o antigo reg. 4
+		rti			            ;
+
+
+;-------------------------------------------------------------------------------
+;	
+;
+;Funcao:
+;	Processa o dado do teclado
+;Retorna:
+;	Dado do teclado processado com SHIFT ou CTRL ou CAPS em R0
+;
+;-------------------------------------------------------------------------------
+_processchar:
+	cmp	r0	#'a'                        ; 
+	blt	checkiscaps_processchar             ; caso a comparacao r0 seja menor que 97, passa para uma checagem se o dado estah em CAPS
+	br	checkctrl_processchar               ; caso nao, passa para checagem se CAPS(do processador) estah ligado.
+                                                    ;
+	checkiscaps_processchar:                    ;
+		cmp	r0	#'A'                ;
+		blt	end_processchar             ; caso a comparacao r0 seja menor que 65, conclui-se que se trata de algo diferente de letra, logo, termina a funcao.
+		add	#32	r0                  ; caso nao, se trata de letra(com CAPS), processa removendo o CAPS.
+                                                    ;
+	checkctrl_processchar:                      ;
+		tst	CTRL                        ;
+		beq	checkshift_processchar      ; caso CTRL = 0, pula para checagem de shift
+		sub	#97	R0                  ; caso CTRL = 1, converte letras para caracteres de controle e termina a funcao.
+		br	end_processchar             ;
+                                                    ;
+		checkshift_processchar:             ;
+			tst	SHIFT               ;
+			beq	end_processchar     ; caso SHIFT = 0, pula para o fim.
+			sub	#32	R0          ; caso SHIFT = 1, poe CAPS nas letras
+	                                            ;
+		end_processchar:                    ;
+			rts	r7                  ;
+
+
+;-------------------------------------------------------------------------------
+;	Variaveis para o programa:
+;-------------------------------------------------------------------------------
+
+SHIFT:		dw 	0                  ; variavel do estado de shift
+CTRL:		dw 	0                  ; variavel do estado de ctrl
+MILLISECONDS:	dw 	0                  ; variavel MILLISECONDS usada para contagem em milissegundos.
