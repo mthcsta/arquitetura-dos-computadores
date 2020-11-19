@@ -1,4 +1,4 @@
 @echo off
 >C:\MASM611\TMP\LSAVED.bat cd
-call AUXCMP
+call AUXSLP
 echo caminho salvo.
